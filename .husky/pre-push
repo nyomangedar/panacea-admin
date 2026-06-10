@@ -1,0 +1,8 @@
+#!/bin/sh
+echo "Running pre-push checks..."
+pnpm run typecheck && pnpm run test
+if [ $? -ne 0 ]; then
+  echo "Checks failed. Push aborted."
+  exit 1
+fi
+echo "All checks passed. Pushing..."
