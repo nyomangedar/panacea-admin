@@ -3,6 +3,8 @@ import type { Sql } from 'postgres';
 import bcrypt from 'bcryptjs';
 import { writeAudit } from '@panacea/shared';
 import { actorId, isUniqueViolation } from '../util.js';
+import { uiContext, NotFoundError } from '../domain/context.js';
+import { updateUser, setUserStatus } from '../domain/users.js';
 
 interface UserRow {
   id: string;
@@ -76,32 +78,11 @@ const usersRoutes: FastifyPluginAsync<{ db: Sql }> = async (app, { db }) => {
     async (req, reply) => {
       const { id } = req.params as { id: string };
       const changes = req.body as { name?: string; email?: string; status?: string };
-
-      const [before] = await db<UserRow[]>`
-        SELECT id, name, email, status, created_at FROM users WHERE id = ${id}`;
-      if (!before) return reply.status(404).send({ error: 'User not found' });
-
       try {
-        const [user] = await db<UserRow[]>`
-          UPDATE users SET ${db({
-            ...(changes.name !== undefined ? { name: changes.name } : {}),
-            ...(changes.email !== undefined ? { email: changes.email } : {}),
-            ...(changes.status !== undefined ? { status: changes.status } : {}),
-          })}
-          WHERE id = ${id}
-          RETURNING id, name, email, status, created_at`;
-        await writeAudit(db, {
-          actorId: actorId(req),
-          action: 'user.updated',
-          targetType: 'user',
-          targetId: id,
-          op: 'update',
-          before: { name: before.name, email: before.email, status: before.status },
-          after: { name: user.name, email: user.email, status: user.status },
-          source: 'ui',
-        });
+        const user = await updateUser(uiContext(app, db, req), { id, changes });
         return { user };
       } catch (err) {
+        if (err instanceof NotFoundError) return reply.status(404).send({ error: 'User not found' });
         if (isUniqueViolation(err)) {
           return reply.status(409).send({ error: 'Email already exists' });
         }
@@ -141,25 +122,13 @@ const usersRoutes: FastifyPluginAsync<{ db: Sql }> = async (app, { db }) => {
     { preHandler: app.requirePermission('admin:users:deactivate') },
     async (req, reply) => {
       const { id } = req.params as { id: string };
-      const [before] = await db<UserRow[]>`
-        SELECT id, name, email, status, created_at FROM users WHERE id = ${id}`;
-      if (!before) return reply.status(404).send({ error: 'User not found' });
-
-      const [user] = await db<UserRow[]>`
-        UPDATE users SET status = 'inactive' WHERE id = ${id}
-        RETURNING id, name, email, status, created_at`;
-      await writeAudit(db, {
-        actorId: actorId(req),
-        action: 'user.deactivated',
-        targetType: 'user',
-        targetId: id,
-        op: 'update',
-        before: { status: before.status },
-        after: { status: 'inactive' },
-        source: 'ui',
-      });
-      await app.publishEvent('user.deactivated', { id });
-      return { user };
+      try {
+        const user = await setUserStatus(uiContext(app, db, req), { id, status: 'inactive' });
+        return { user };
+      } catch (err) {
+        if (err instanceof NotFoundError) return reply.status(404).send({ error: 'User not found' });
+        throw err;
+      }
     },
   );
 
@@ -168,25 +137,13 @@ const usersRoutes: FastifyPluginAsync<{ db: Sql }> = async (app, { db }) => {
     { preHandler: app.requirePermission('admin:users:deactivate') },
     async (req, reply) => {
       const { id } = req.params as { id: string };
-      const [before] = await db<UserRow[]>`
-        SELECT id, name, email, status, created_at FROM users WHERE id = ${id}`;
-      if (!before) return reply.status(404).send({ error: 'User not found' });
-
-      const [user] = await db<UserRow[]>`
-        UPDATE users SET status = 'active' WHERE id = ${id}
-        RETURNING id, name, email, status, created_at`;
-      await writeAudit(db, {
-        actorId: actorId(req),
-        action: 'user.reactivated',
-        targetType: 'user',
-        targetId: id,
-        op: 'update',
-        before: { status: before.status },
-        after: { status: 'active' },
-        source: 'ui',
-      });
-      await app.publishEvent('user.reactivated', { id });
-      return { user };
+      try {
+        const user = await setUserStatus(uiContext(app, db, req), { id, status: 'active' });
+        return { user };
+      } catch (err) {
+        if (err instanceof NotFoundError) return reply.status(404).send({ error: 'User not found' });
+        throw err;
+      }
     },
   );
 
@@ -198,7 +155,11 @@ const usersRoutes: FastifyPluginAsync<{ db: Sql }> = async (app, { db }) => {
       const [user] = await db<UserRow[]>`
         SELECT id, name, email, status, created_at FROM users WHERE id = ${id}`;
       if (!user) return reply.status(404).send({ error: 'User not found' });
-      return { user };
+      const groups = await db<{ id: string; name: string }[]>`
+        SELECT g.id, g.name FROM group_members gm
+        JOIN groups g ON g.id = gm.group_id
+        WHERE gm.user_id = ${id} ORDER BY g.name`;
+      return { user, groups };
     },
   );
 };

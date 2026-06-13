@@ -2,6 +2,8 @@ import type { FastifyPluginAsync } from 'fastify';
 import type { Sql } from 'postgres';
 import { writeAudit } from '@panacea/shared';
 import { actorId, isUniqueViolation } from '../util.js';
+import { uiContext, NotFoundError } from '../domain/context.js';
+import { updateGroup, addGroupMember, removeGroupMember } from '../domain/groups.js';
 
 interface GroupRow {
   id: string;
@@ -97,29 +99,13 @@ const groupsRoutes: FastifyPluginAsync<{ db: Sql }> = async (app, { db }) => {
     async (req, reply) => {
       const { id } = req.params as { id: string };
       const changes = req.body as { name?: string; description?: string };
-      const [before] = await db<GroupRow[]>`
-        SELECT id, name, description, created_at FROM groups WHERE id = ${id}`;
-      if (!before) return reply.status(404).send({ error: 'Group not found' });
-
-      const [group] = await db<GroupRow[]>`
-        UPDATE groups SET ${db({
-          ...(changes.name !== undefined ? { name: changes.name } : {}),
-          ...(changes.description !== undefined ? { description: changes.description } : {}),
-        })}
-        WHERE id = ${id}
-        RETURNING id, name, description, created_at`;
-      await writeAudit(db, {
-        actorId: actorId(req),
-        action: 'group.updated',
-        targetType: 'group',
-        targetId: id,
-        op: 'update',
-        before: { name: before.name, description: before.description },
-        after: { name: group.name, description: group.description },
-        source: 'ui',
-      });
-      await app.publishEvent('group.updated', { id, action: 'updated' });
-      return { group };
+      try {
+        const group = await updateGroup(uiContext(app, db, req), { id, changes });
+        return { group };
+      } catch (err) {
+        if (err instanceof NotFoundError) return reply.status(404).send({ error: 'Group not found' });
+        throw err;
+      }
     },
   );
 
@@ -156,21 +142,11 @@ const groupsRoutes: FastifyPluginAsync<{ db: Sql }> = async (app, { db }) => {
       const { id } = req.params as { id: string };
       const { userId } = req.body as { userId: string };
       try {
-        await db`INSERT INTO group_members (user_id, group_id) VALUES (${userId}, ${id})`;
+        await addGroupMember(uiContext(app, db, req), { groupId: id, userId });
       } catch (err) {
         if (isUniqueViolation(err)) return reply.status(409).send({ error: 'Already a member' });
         throw err;
       }
-      await writeAudit(db, {
-        actorId: actorId(req),
-        action: 'group.member.added',
-        targetType: 'group',
-        targetId: id,
-        op: 'link.add',
-        after: { table: 'group_members', user_id: userId, group_id: id },
-        source: 'ui',
-      });
-      await app.publishEvent('group.updated', { id, action: 'member.added' });
       return reply.status(201).send({ ok: true });
     },
   );
@@ -180,17 +156,7 @@ const groupsRoutes: FastifyPluginAsync<{ db: Sql }> = async (app, { db }) => {
     { preHandler: app.requirePermission('admin:groups:manage') },
     async (req) => {
       const { id, userId } = req.params as { id: string; userId: string };
-      await db`DELETE FROM group_members WHERE group_id = ${id} AND user_id = ${userId}`;
-      await writeAudit(db, {
-        actorId: actorId(req),
-        action: 'group.member.removed',
-        targetType: 'group',
-        targetId: id,
-        op: 'link.remove',
-        before: { table: 'group_members', user_id: userId, group_id: id },
-        source: 'ui',
-      });
-      await app.publishEvent('group.updated', { id, action: 'member.removed' });
+      await removeGroupMember(uiContext(app, db, req), { groupId: id, userId });
       return { ok: true };
     },
   );

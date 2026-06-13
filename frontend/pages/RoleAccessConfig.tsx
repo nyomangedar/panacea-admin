@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiGet, apiPost, apiDelete } from '../api.js';
+import { ChangeHistory } from '../components/ChangeHistory.js';
 
 interface Leaf { id: string; key: string; label: string }
 interface PageNode { page: string; access: Leaf | null; functions: Leaf[] }
@@ -73,6 +74,8 @@ export function RoleAccessConfig({ roleId }: { roleId: string }) {
           </section>
         );
       })}
+
+      <ChangeHistory targetType="role" targetId={roleId} />
     </div>
   );
 }

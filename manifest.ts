@@ -37,6 +37,7 @@ export const manifest: ModuleManifest = {
 
     { key: 'admin:audit:access', label: 'Audit log', level: 'page', page: 'Audit' },
     { key: 'admin:audit:read', label: 'View audit log', level: 'function', page: 'Audit' },
+    { key: 'admin:audit:revert', label: 'Revert change', level: 'function', page: 'Audit' },
 
     { key: 'admin:data:access', label: 'Import / Export', level: 'page', page: 'Import/Export' },
     { key: 'admin:export', label: 'Export data', level: 'function', page: 'Import/Export' },
