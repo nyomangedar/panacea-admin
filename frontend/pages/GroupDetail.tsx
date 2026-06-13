@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button, Input } from '@panacea/ui';
 import { apiGet, apiPost, apiDelete } from '../api.js';
+import { ChangeHistory } from '../components/ChangeHistory.js';
 
 interface Member {
   id: string;
@@ -66,6 +67,8 @@ export function GroupDetail({ groupId }: { groupId: string }) {
         <Input label="Role ID" value={roleId} onChange={setRoleId} />
         <Button onClick={() => assignRole.mutate(roleId)}>Assign role</Button>
       </section>
+
+      <ChangeHistory targetType="group" targetId={groupId} />
     </div>
   );
 }

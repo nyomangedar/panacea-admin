@@ -145,4 +145,24 @@ describe('POST /api/admin/import', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0].source).toBe('import');
   });
+
+  it('import audits group_roles and role_permissions links with source=import', async () => {
+    // TDD: import.test.ts — import audits group_roles and role_permissions link.add entries with source='import' | positive
+    await db`INSERT INTO permissions (key, label, level, module)
+      VALUES ('ticketing:tickets:write', 'Write', 'function', 'ticketing')
+      ON CONFLICT (key) DO NOTHING`;
+    await importBundle({
+      groups: 'name,description\nLinked Group,x',
+      roles: 'name,description\nLinked Role,x',
+      group_roles: 'group_name,role_name\nLinked Group,Linked Role',
+      role_permissions: 'role_name,permission_key\nLinked Role,ticketing:tickets:write',
+    });
+
+    const gr = await db<{ source: string }[]>`
+      SELECT source FROM audit_logs WHERE action = 'group.role.added' AND source = 'import'`;
+    const rp = await db<{ source: string }[]>`
+      SELECT source FROM audit_logs WHERE action = 'role.permission.added' AND source = 'import'`;
+    expect(gr.length).toBeGreaterThanOrEqual(1);
+    expect(rp.length).toBeGreaterThanOrEqual(1);
+  });
 });

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Button, Input, Modal } from '@panacea/ui';
 import { useUsers, type AdminUser } from '../hooks/useUsers.js';
 
-export function UserList() {
+export function UserList({ onOpen }: { onOpen?: (id: string) => void } = {}) {
   const { data, isLoading } = useUsers();
   const [search, setSearch] = useState('');
   const [confirm, setConfirm] = useState<AdminUser | null>(null);
@@ -32,7 +32,15 @@ export function UserList() {
             {users.map((u) => (
               <tr key={u.id}>
                 <td>{u.name}</td>
-                <td>{u.email}</td>
+                <td>
+                  {onOpen ? (
+                    <Button variant="ghost" size="sm" onClick={() => onOpen(u.id)}>
+                      {u.email}
+                    </Button>
+                  ) : (
+                    u.email
+                  )}
+                </td>
                 <td>
                   <span className={`badge badge-${u.status}`} data-testid="status-badge">
                     {u.status}

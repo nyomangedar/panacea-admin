@@ -2,6 +2,8 @@ import type { FastifyPluginAsync } from 'fastify';
 import type { Sql } from 'postgres';
 import { writeAudit } from '@panacea/shared';
 import { actorId, isUniqueViolation } from '../util.js';
+import { uiContext } from '../domain/context.js';
+import { addRolePermission, removeRolePermission, addGroupRole } from '../domain/roles.js';
 
 interface RoleRow {
   id: string;
@@ -79,20 +81,11 @@ const rolesRoutes: FastifyPluginAsync<{ db: Sql }> = async (app, { db }) => {
       const { id } = req.params as { id: string };
       const { permissionId } = req.body as { permissionId: string };
       try {
-        await db`INSERT INTO role_permissions (role_id, permission_id) VALUES (${id}, ${permissionId})`;
+        await addRolePermission(uiContext(app, db, req), { roleId: id, permissionId });
       } catch (err) {
         if (isUniqueViolation(err)) return reply.status(409).send({ error: 'Already assigned' });
         throw err;
       }
-      await writeAudit(db, {
-        actorId: actorId(req),
-        action: 'role.permission.added',
-        targetType: 'role',
-        targetId: id,
-        op: 'link.add',
-        after: { table: 'role_permissions', role_id: id, permission_id: permissionId },
-        source: 'ui',
-      });
       return reply.status(201).send({ ok: true });
     },
   );
@@ -102,16 +95,7 @@ const rolesRoutes: FastifyPluginAsync<{ db: Sql }> = async (app, { db }) => {
     { preHandler: app.requirePermission('admin:roles:assign') },
     async (req) => {
       const { id, permissionId } = req.params as { id: string; permissionId: string };
-      await db`DELETE FROM role_permissions WHERE role_id = ${id} AND permission_id = ${permissionId}`;
-      await writeAudit(db, {
-        actorId: actorId(req),
-        action: 'role.permission.removed',
-        targetType: 'role',
-        targetId: id,
-        op: 'link.remove',
-        before: { table: 'role_permissions', role_id: id, permission_id: permissionId },
-        source: 'ui',
-      });
+      await removeRolePermission(uiContext(app, db, req), { roleId: id, permissionId });
       return { ok: true };
     },
   );
@@ -123,21 +107,11 @@ const rolesRoutes: FastifyPluginAsync<{ db: Sql }> = async (app, { db }) => {
       const { id } = req.params as { id: string };
       const { roleId } = req.body as { roleId: string };
       try {
-        await db`INSERT INTO group_roles (group_id, role_id) VALUES (${id}, ${roleId})`;
+        await addGroupRole(uiContext(app, db, req), { groupId: id, roleId });
       } catch (err) {
         if (isUniqueViolation(err)) return reply.status(409).send({ error: 'Already assigned' });
         throw err;
       }
-      await writeAudit(db, {
-        actorId: actorId(req),
-        action: 'group.role.added',
-        targetType: 'group',
-        targetId: id,
-        op: 'link.add',
-        after: { table: 'group_roles', group_id: id, role_id: roleId },
-        source: 'ui',
-      });
-      await app.publishEvent('group.updated', { id, action: 'role.added' });
       return reply.status(201).send({ ok: true });
     },
   );

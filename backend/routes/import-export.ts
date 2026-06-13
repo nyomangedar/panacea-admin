@@ -174,6 +174,15 @@ const importExportRoutes: FastifyPluginAsync<{ db: Sql }> = async (app, { db }) 
           continue;
         }
         await db`INSERT INTO group_roles (group_id, role_id) VALUES (${g.id}, ${role.id})`;
+        await writeAudit(db, {
+          actorId: actor,
+          action: 'group.role.added',
+          targetType: 'group',
+          targetId: g.id,
+          op: 'link.add',
+          after: { table: 'group_roles', group_id: g.id, role_id: role.id },
+          source: 'import',
+        });
         report.group_roles.created++;
       }
     }
@@ -194,6 +203,15 @@ const importExportRoutes: FastifyPluginAsync<{ db: Sql }> = async (app, { db }) 
           continue;
         }
         await db`INSERT INTO role_permissions (role_id, permission_id) VALUES (${role.id}, ${perm.id})`;
+        await writeAudit(db, {
+          actorId: actor,
+          action: 'role.permission.added',
+          targetType: 'role',
+          targetId: role.id,
+          op: 'link.add',
+          after: { table: 'role_permissions', role_id: role.id, permission_id: perm.id },
+          source: 'import',
+        });
         report.role_permissions.created++;
       }
     }

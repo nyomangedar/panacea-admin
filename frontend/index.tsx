@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Button } from '@panacea/ui';
 import { apiGet } from './api.js';
 import { UserList } from './pages/UserList.js';
+import { UserDetail } from './pages/UserDetail.js';
 import { AuditLog } from './pages/AuditLog.js';
 import { ImportExport } from './pages/ImportExport.js';
 import { GroupDetail } from './pages/GroupDetail.js';
@@ -17,6 +18,21 @@ const NAV: { key: View; label: string }[] = [
   { key: 'audit', label: 'Audit log' },
   { key: 'data', label: 'Import / Export' },
 ];
+
+function UsersView() {
+  const [selected, setSelected] = useState<string | null>(null);
+  if (selected) {
+    return (
+      <div>
+        <Button variant="ghost" size="sm" onClick={() => setSelected(null)}>
+          ← Back to users
+        </Button>
+        <UserDetail userId={selected} />
+      </div>
+    );
+  }
+  return <UserList onOpen={setSelected} />;
+}
 
 function GroupsView() {
   const { data } = useQuery({
@@ -94,7 +110,7 @@ export function Admin() {
         ))}
       </nav>
       <div style={{ flex: 1 }}>
-        {view === 'users' && <UserList />}
+        {view === 'users' && <UsersView />}
         {view === 'groups' && <GroupsView />}
         {view === 'roles' && <RolesView />}
         {view === 'audit' && <AuditLog />}

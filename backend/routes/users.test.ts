@@ -181,4 +181,24 @@ describe('user routes', () => {
     expect(missing.statusCode).toBe(404);
     await a.close();
   });
+
+  it('GET /users/:id includes the user group memberships', async () => {
+    // TDD: user-routes.test.ts — GET /users/:id includes the user's group memberships | positive
+    const a = await app();
+    const created = await a.inject({
+      method: 'POST',
+      url: '/api/admin/users',
+      headers: asUser(admin),
+      payload: { name: 'Grouped', email: 'grouped@x.com', password: 'supersecret' },
+    });
+    const { user } = created.json<{ user: { id: string } }>();
+    const [group] = await db<{ id: string }[]>`INSERT INTO groups (name) VALUES ('Detail Group') RETURNING id`;
+    await db`INSERT INTO group_members (user_id, group_id) VALUES (${user.id}, ${group.id})`;
+
+    const res = await a.inject({ method: 'GET', url: `/api/admin/users/${user.id}`, headers: asUser(admin) });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ groups: { id: string; name: string }[] }>();
+    expect(body.groups.map((g) => g.name)).toContain('Detail Group');
+    await a.close();
+  });
 });
