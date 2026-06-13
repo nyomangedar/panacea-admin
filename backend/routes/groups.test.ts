@@ -117,6 +117,24 @@ describe('group routes', () => {
     await a.close();
   });
 
+  it('GET /groups/:id returns the group with members and roles', async () => {
+    // TDD: group-routes.test.ts — GET /groups/:id returns the group with members and roles | positive
+    const a = await app();
+    const gid = await makeGroup(a, 'Detail Group');
+    const uid = await makeUser('detail@x.com');
+    await a.inject({ method: 'POST', url: `/api/admin/groups/${gid}/members`, headers: asUser(admin), payload: { userId: uid } });
+    const [role] = await db<{ id: string }[]>`INSERT INTO roles (name) VALUES ('DetailRole') RETURNING id`;
+    await db`INSERT INTO group_roles (group_id, role_id) VALUES (${gid}, ${role.id})`;
+
+    const res = await a.inject({ method: 'GET', url: `/api/admin/groups/${gid}`, headers: asUser(admin) });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ group: { id: string }; members: { email: string }[]; roles: { name: string }[] }>();
+    expect(body.group.id).toBe(gid);
+    expect(body.members.map((m) => m.email)).toContain('detail@x.com');
+    expect(body.roles.map((r) => r.name)).toContain('DetailRole');
+    await a.close();
+  });
+
   it('GET /groups returns groups with member count', async () => {
     // TDD: group-routes.test.ts — GET /groups returns groups with member count | positive
     const a = await app();

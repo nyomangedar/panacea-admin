@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import type { Sql } from 'postgres';
 
 interface PermRow {
+  id: string;
   key: string;
   label: string;
   level: string;
@@ -10,6 +11,7 @@ interface PermRow {
 }
 
 interface Leaf {
+  id: string;
   key: string;
   label: string;
 }
@@ -51,7 +53,7 @@ function buildTree(rows: PermRow[]): ModuleNode[] {
   };
 
   for (const r of rows) {
-    const leaf: Leaf = { key: r.key, label: r.label };
+    const leaf: Leaf = { id: r.id, key: r.key, label: r.label };
     if (r.level === 'module') {
       getModule(r.module).access = leaf;
     } else if (r.level === 'page' && r.page) {
@@ -72,7 +74,7 @@ const permissionsRoutes: FastifyPluginAsync<{ db: Sql }> = async (app, { db }) =
     { preHandler: app.requirePermission('admin:roles:read') },
     async () => {
       const rows = await db<PermRow[]>`
-        SELECT key, label, level, module, page
+        SELECT id, key, label, level, module, page
         FROM permissions ORDER BY module, sort_order, key`;
       return { modules: buildTree(rows) };
     },

@@ -16,3 +16,9 @@ export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
   if (!res.ok) throw new Error(`POST ${path} failed: ${res.status}`);
   return (await res.json()) as T;
 }
+
+export async function apiDelete<T = unknown>(path: string): Promise<T> {
+  const res = await fetch(path, { method: 'DELETE', credentials: 'include' });
+  if (!res.ok) throw new Error(`DELETE ${path} failed: ${res.status}`);
+  return (await res.json()) as T;
+}

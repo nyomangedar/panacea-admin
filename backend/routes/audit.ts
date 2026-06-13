@@ -39,10 +39,13 @@ const auditRoutes: FastifyPluginAsync<{ db: Sql }> = async (app, { db }) => {
         ? db`WHERE ${conds.reduce((acc, c) => db`${acc} AND ${c}`)}`
         : db``;
 
-      const entries = await db<AuditRow[]>`
-        SELECT id, actor_id, action, target_type, target_id, payload, source, reverts_id, created_at
-        FROM audit_logs ${where}
-        ORDER BY created_at DESC
+      const entries = await db<(AuditRow & { actor_email: string | null })[]>`
+        SELECT al.id, al.actor_id, u.email AS actor_email, al.action, al.target_type,
+               al.target_id, al.payload, al.source, al.reverts_id, al.created_at
+        FROM audit_logs al
+        LEFT JOIN users u ON u.id = al.actor_id
+        ${where}
+        ORDER BY al.created_at DESC
         LIMIT ${pageSize} OFFSET ${offset}`;
       const [{ count }] = await db<{ count: string }[]>`
         SELECT COUNT(*)::text AS count FROM audit_logs ${where}`;

@@ -49,6 +49,21 @@ const groupsRoutes: FastifyPluginAsync<{ db: Sql }> = async (app, { db }) => {
     return { groups };
   });
 
+  app.get('/groups/:id', { preHandler: app.requirePermission('admin:groups:read') }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const [group] = await db<GroupRow[]>`
+      SELECT id, name, description, created_at FROM groups WHERE id = ${id}`;
+    if (!group) return reply.status(404).send({ error: 'Group not found' });
+    const members = await db<{ id: string; name: string | null; email: string; status: string }[]>`
+      SELECT u.id, u.name, u.email, u.status
+      FROM group_members gm JOIN users u ON u.id = gm.user_id
+      WHERE gm.group_id = ${id} ORDER BY u.email`;
+    const roles = await db<{ id: string; name: string }[]>`
+      SELECT r.id, r.name FROM group_roles gr JOIN roles r ON r.id = gr.role_id
+      WHERE gr.group_id = ${id} ORDER BY r.name`;
+    return { group, members, roles };
+  });
+
   app.post(
     '/groups',
     { schema: { body: createBody }, preHandler: app.requirePermission('admin:groups:manage') },
