@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
@@ -61,17 +61,36 @@ describe('RoleAccessConfig', () => {
     expect(screen.getByLabelText('Create user')).toBeInTheDocument();
   });
 
-  it('toggling a function-level permission calls the assign/remove endpoint', async () => {
+  it('staged toggles are not sent until Save + Confirm', async () => {
     // TDD: RoleAccessConfig.test.tsx — toggling a function-level permission calls assign/remove endpoint | positive
     const calls = mockApi(allGranted);
     renderConfig();
     await waitFor(() => expect(screen.getByLabelText('Create user')).toBeInTheDocument());
 
-    // currently granted → toggling off should DELETE by permission id
+    // currently granted → toggling off stages a removal but sends nothing yet
     await userEvent.click(screen.getByLabelText('Create user'));
+    expect(calls.some((c) => c.method === 'DELETE')).toBe(false);
+
+    // Save opens a confirmation listing the change; Confirm commits it (DELETE by permission id)
+    await userEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('Revoke:')).toBeInTheDocument();
+    expect(within(dialog).getByText('Create user')).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Confirm' }));
     await waitFor(() =>
       expect(calls.some((c) => c.method === 'DELETE' && c.url.endsWith('/roles/r1/permissions/pc'))).toBe(true),
     );
+  });
+
+  it('Save changes is disabled until something is toggled', async () => {
+    // TDD: RoleAccessConfig.test.tsx — Save changes is disabled with no pending changes | negative
+    mockApi(allGranted);
+    renderConfig();
+    await waitFor(() => expect(screen.getByLabelText('Create user')).toBeInTheDocument());
+    expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled();
+
+    await userEvent.click(screen.getByLabelText('Create user'));
+    expect(screen.getByRole('button', { name: 'Save changes' })).not.toBeDisabled();
   });
 
   it('toggling a module/page access off disables its child toggles', async () => {

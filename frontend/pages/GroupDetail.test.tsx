@@ -22,6 +22,21 @@ function mockApi(initialMembers: Member[]) {
         return { ok: true, json: async () => ({ ok: true }) };
       }
       if (method === 'POST') return { ok: true, json: async () => ({ ok: true }) };
+      if (String(url).endsWith('/admin/roles')) {
+        return { ok: true, json: async () => ({ roles: [{ id: 'r9', name: 'Viewer' }] }) };
+      }
+      if (String(url).endsWith('/admin/users')) {
+        return {
+          ok: true,
+          json: async () => ({
+            users: [
+              ...members,
+              { id: 'u8', name: 'Yan', email: 'yan@x.com', status: 'active' },
+              { id: 'u9', name: 'Zoe', email: 'zoe@x.com', status: 'active' },
+            ],
+          }),
+        };
+      }
       return {
         ok: true,
         json: async () => ({
@@ -67,7 +82,11 @@ describe('GroupDetail', () => {
 
     await userEvent.click(screen.getAllByRole('button', { name: 'Remove' })[0]);
 
-    await waitFor(() => expect(screen.queryByText('alice@x.com')).not.toBeInTheDocument());
+    // Gone from the member list (rendered as a <span>); she may now appear in the
+    // add-member <option> picker, which is correct.
+    await waitFor(() =>
+      expect(screen.queryByText('alice@x.com', { selector: 'span' })).not.toBeInTheDocument(),
+    );
     expect(calls.some((c) => c.method === 'DELETE' && c.url.endsWith('/groups/g1/members/u1'))).toBe(true);
   });
 
@@ -77,11 +96,27 @@ describe('GroupDetail', () => {
     renderDetail();
     await waitFor(() => expect(screen.getByText('alice@x.com')).toBeInTheDocument());
 
-    await userEvent.type(screen.getByLabelText('Role ID'), 'role-9');
+    await userEvent.selectOptions(await screen.findByLabelText('Role'), 'r9');
     await userEvent.click(screen.getByRole('button', { name: 'Assign role' }));
 
     await waitFor(() =>
       expect(calls.some((c) => c.method === 'POST' && c.url.endsWith('/groups/g1/roles'))).toBe(true),
+    );
+  });
+
+  it('adding multiple members from existing users calls the endpoint for each', async () => {
+    // TDD: GroupDetail.test.tsx — adding multiple members from existing users calls the endpoint for each | positive
+    const calls = mockApi(sample);
+    renderDetail();
+    await waitFor(() => expect(screen.getByText('alice@x.com')).toBeInTheDocument());
+
+    await userEvent.selectOptions(await screen.findByLabelText('Members'), ['u8', 'u9']);
+    await userEvent.click(screen.getByRole('button', { name: 'Add members' }));
+
+    await waitFor(() =>
+      expect(
+        calls.filter((c) => c.method === 'POST' && c.url.endsWith('/groups/g1/members')).length,
+      ).toBe(2),
     );
   });
 });

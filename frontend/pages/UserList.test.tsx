@@ -105,4 +105,19 @@ describe('UserList', () => {
       expect(calls.some((c) => c.method === 'POST' && c.url.endsWith('/users/u1/deactivate'))).toBe(true),
     );
   });
+
+  it('an inactive user shows Reactivate and confirming calls the reactivate endpoint', async () => {
+    // TDD: UserList.test.tsx — inactive user shows Reactivate and confirming calls reactivate | positive
+    const calls = mockApiWithCalls(sample);
+    renderList();
+    await waitFor(() => expect(screen.getByText('bob@x.com')).toBeInTheDocument());
+
+    // bob (u2) is inactive in the sample
+    await userEvent.click(screen.getByRole('button', { name: 'Reactivate' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+
+    await waitFor(() =>
+      expect(calls.some((c) => c.method === 'POST' && c.url.endsWith('/users/u2/reactivate'))).toBe(true),
+    );
+  });
 });

@@ -6,7 +6,7 @@ import { apiPost } from '../api.js';
 
 const emptyForm = { name: '', email: '', password: '' };
 
-export function UserList({ onOpen }: { onOpen?: (id: string) => void } = {}) {
+export function UserList({ onOpen }: { onOpen?: (id: string, label: string) => void } = {}) {
   const { data, isLoading } = useUsers();
   const qc = useQueryClient();
   const [search, setSearch] = useState('');
@@ -28,13 +28,18 @@ export function UserList({ onOpen }: { onOpen?: (id: string) => void } = {}) {
     onError: () => setCreateError('Could not create user — the email may already exist.'),
   });
 
-  const deactivate = useMutation({
-    mutationFn: (id: string) => apiPost(`/api/admin/users/${id}/deactivate`),
+  const changeStatus = useMutation({
+    mutationFn: ({ id, action }: { id: string; action: 'deactivate' | 'reactivate' }) =>
+      apiPost(`/api/admin/users/${id}/${action}`),
     onSuccess: () => {
       refresh();
       setConfirm(null);
     },
   });
+
+  const confirmAction: 'deactivate' | 'reactivate' =
+    confirm?.status === 'active' ? 'deactivate' : 'reactivate';
+  const confirmVerb = confirmAction === 'deactivate' ? 'Deactivate' : 'Reactivate';
 
   const q = search.toLowerCase();
   const users = (data?.users ?? []).filter(
@@ -66,7 +71,7 @@ export function UserList({ onOpen }: { onOpen?: (id: string) => void } = {}) {
                 <td>{u.name}</td>
                 <td>
                   {onOpen ? (
-                    <Button variant="ghost" size="sm" onClick={() => onOpen(u.id)}>
+                    <Button variant="ghost" size="sm" onClick={() => onOpen(u.id, u.email)}>
                       {u.email}
                     </Button>
                   ) : (
@@ -79,9 +84,15 @@ export function UserList({ onOpen }: { onOpen?: (id: string) => void } = {}) {
                   </span>
                 </td>
                 <td>
-                  <Button variant="danger" size="sm" onClick={() => setConfirm(u)}>
-                    Deactivate
-                  </Button>
+                  {u.status === 'active' ? (
+                    <Button variant="danger" size="sm" onClick={() => setConfirm(u)}>
+                      Deactivate
+                    </Button>
+                  ) : (
+                    <Button variant="secondary" size="sm" onClick={() => setConfirm(u)}>
+                      Reactivate
+                    </Button>
+                  )}
                 </td>
               </tr>
             ))}
@@ -117,13 +128,13 @@ export function UserList({ onOpen }: { onOpen?: (id: string) => void } = {}) {
       <Modal
         open={confirm !== null}
         onClose={() => setConfirm(null)}
-        title="Deactivate user"
-        description={confirm ? `Deactivate ${confirm.email}?` : ''}
+        title={`${confirmVerb} user`}
+        description={confirm ? `${confirmVerb} ${confirm.email}?` : ''}
         footer={
           <Button
-            variant="danger"
-            loading={deactivate.isPending}
-            onClick={() => confirm && deactivate.mutate(confirm.id)}
+            variant={confirmAction === 'deactivate' ? 'danger' : 'primary'}
+            loading={changeStatus.isPending}
+            onClick={() => confirm && changeStatus.mutate({ id: confirm.id, action: confirmAction })}
           >
             Confirm
           </Button>

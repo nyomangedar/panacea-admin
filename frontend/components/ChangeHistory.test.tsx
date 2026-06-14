@@ -122,6 +122,26 @@ describe('ChangeHistory', () => {
     expect(alert).toHaveTextContent('Field "name" changed since this version');
   });
 
+  it('paginates: Next requests the following page', async () => {
+    // TDD: ChangeHistory.test.tsx — pagination Next requests the next page | positive
+    const fetchMock = vi.fn(
+      async (_url: RequestInfo | URL, _init?: RequestInit) =>
+        ({
+          ok: true,
+          status: 200,
+          json: async () => ({ entries: [entry({})], total: 20, page: 1, pageSize: 8 }),
+        }) as unknown as Response,
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    renderHistory();
+
+    expect(await screen.findByText(/Page 1 of 3/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Next' }));
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.some(([u]) => String(u).includes('page=2'))).toBe(true),
+    );
+  });
+
   it('reverted entries show a "revert of #X" badge', async () => {
     // TDD: ChangeHistory.test.tsx — reverted entries show a "revert of #X" badge | positive
     stub([

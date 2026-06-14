@@ -32,8 +32,19 @@ async function app() {
 
 interface EnrichedEntry {
   action: string;
+  target_id: string | null;
   revertible: boolean;
   reason?: string;
+}
+
+async function createUser(a: Awaited<ReturnType<typeof app>>, email: string): Promise<string> {
+  const r = await a.inject({
+    method: 'POST',
+    url: '/api/admin/users',
+    headers: asUser(admin),
+    payload: { name: email, email, password: 'supersecret' },
+  });
+  return r.json<{ user: { id: string } }>().user.id;
 }
 
 describe('audit history enrichment', () => {
@@ -67,6 +78,25 @@ describe('audit history enrichment', () => {
     expect(updated?.revertible).toBe(true);
     expect(createdEntry?.revertible).toBe(false);
     expect(typeof createdEntry?.reason).toBe('string');
+    await a.close();
+  });
+
+  it('scopes history to the requested target_id (excludes other objects)', async () => {
+    // TDD: audit-history.test.ts — GET /audit-logs?target_id returns only that object's entries | positive
+    const a = await app();
+    const idA = await createUser(a, 'scope-a@x.com');
+    const idB = await createUser(a, 'scope-b@x.com');
+    await a.inject({ method: 'POST', url: `/api/admin/users/${idA}/deactivate`, headers: asUser(admin) });
+    await a.inject({ method: 'POST', url: `/api/admin/users/${idB}/deactivate`, headers: asUser(admin) });
+
+    const res = await a.inject({
+      method: 'GET',
+      url: `/api/admin/audit-logs?target_type=user&target_id=${idA}`,
+      headers: asUser(admin),
+    });
+    const entries = res.json<{ entries: EnrichedEntry[] }>().entries;
+    expect(entries.length).toBeGreaterThan(0);
+    expect(entries.every((e) => e.target_id === idA)).toBe(true);
     await a.close();
   });
 });

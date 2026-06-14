@@ -26,6 +26,7 @@ const auditRoutes: FastifyPluginAsync<{ db: Sql }> = async (app, { db }) => {
         actor?: string;
         action?: string;
         target?: string;
+        target_id?: string;
         target_type?: string;
         source?: string;
       };
@@ -33,10 +34,11 @@ const auditRoutes: FastifyPluginAsync<{ db: Sql }> = async (app, { db }) => {
       const pageSize = Math.min(100, Math.max(1, Number.parseInt(q.pageSize ?? '20', 10) || 20));
       const offset = (page - 1) * pageSize;
 
+      const targetId = q.target_id ?? q.target;
       const conds: PendingQuery<Row[]>[] = [];
       if (q.actor) conds.push(db`actor_id = ${q.actor}`);
       if (q.action) conds.push(db`action = ${q.action}`);
-      if (q.target) conds.push(db`target_id = ${q.target}`);
+      if (targetId) conds.push(db`target_id = ${targetId}`);
       if (q.target_type) conds.push(db`target_type = ${q.target_type}`);
       if (q.source) conds.push(db`source = ${q.source}`);
       const where = conds.length

@@ -7,6 +7,7 @@ import { UserDetail } from './UserDetail.js';
 
 interface MockOpts {
   groups?: { id: string; name: string }[];
+  allGroups?: { id: string; name: string }[];
   historyEntries?: unknown[];
 }
 
@@ -21,8 +22,19 @@ function mockApi(opts: MockOpts = {}) {
         const entries = opts.historyEntries ?? [];
         return { ok: true, json: async () => ({ entries, total: entries.length, page: 1, pageSize: 20 }) };
       }
-      if (method === 'PATCH') {
-        return { ok: true, json: async () => ({ user: { id: 'u1' } }) };
+      if (method === 'PATCH' || method === 'POST' || method === 'DELETE') {
+        return { ok: true, json: async () => ({ ok: true }) };
+      }
+      if (String(url).endsWith('/admin/groups')) {
+        return {
+          ok: true,
+          json: async () => ({
+            groups: opts.allGroups ?? [
+              { id: 'g1', name: 'Team A' },
+              { id: 'g2', name: 'Team B' },
+            ],
+          }),
+        };
       }
       return {
         ok: true,
@@ -87,5 +99,32 @@ describe('UserDetail', () => {
     renderDetail();
     expect(await screen.findByText('Change history')).toBeInTheDocument();
     await waitFor(() => expect(screen.getByText('Alice B')).toBeInTheDocument());
+  });
+
+  it('adding the user to a group calls the endpoint', async () => {
+    // TDD: UserDetail.test.tsx — adding the user to a group calls the endpoint | positive
+    const calls = mockApi();
+    renderDetail();
+    await waitFor(() => expect(screen.getByDisplayValue('alice@x.com')).toBeInTheDocument());
+
+    await userEvent.selectOptions(await screen.findByLabelText('Group'), 'g2');
+    await userEvent.click(screen.getByRole('button', { name: 'Add to group' }));
+
+    await waitFor(() =>
+      expect(calls.some((c) => c.method === 'POST' && c.url.endsWith('/groups/g2/members'))).toBe(true),
+    );
+  });
+
+  it('removing the user from a group calls the endpoint', async () => {
+    // TDD: UserDetail.test.tsx — removing the user from a group calls the endpoint | positive
+    const calls = mockApi();
+    renderDetail();
+    await waitFor(() => expect(screen.getByText('Team A')).toBeInTheDocument());
+
+    await userEvent.click(screen.getAllByRole('button', { name: 'Remove' })[0]);
+
+    await waitFor(() =>
+      expect(calls.some((c) => c.method === 'DELETE' && c.url.endsWith('/groups/g1/members/u1'))).toBe(true),
+    );
   });
 });

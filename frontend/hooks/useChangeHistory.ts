@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { apiGet } from '../api.js';
 
 export interface HistoryEntry {
@@ -27,16 +27,17 @@ export interface HistoryPage {
   pageSize: number;
 }
 
-// Per-entity change history: the audit log filtered to one target, with each row
-// enriched (revertible + reason) by the backend. Keyed under the entity so a revert
-// can invalidate the entity and its history together.
-export function useChangeHistory(targetType: string, targetId: string) {
+// Per-entity change history: the audit log filtered to one target (paginated), with
+// each row enriched (revertible + reason) by the backend. Keyed under the entity so a
+// revert can invalidate the entity and all its history pages together.
+export function useChangeHistory(targetType: string, targetId: string, page = 1, pageSize = 8) {
   return useQuery({
-    queryKey: ['admin', targetType, targetId, 'history'],
+    queryKey: ['admin', targetType, targetId, 'history', page],
     queryFn: () =>
       apiGet<HistoryPage>(
-        `/api/admin/audit-logs?target_type=${targetType}&target_id=${targetId}`,
+        `/api/admin/audit-logs?target_type=${targetType}&target_id=${targetId}&page=${page}&pageSize=${pageSize}`,
       ),
     enabled: !!targetId,
+    placeholderData: keepPreviousData,
   });
 }

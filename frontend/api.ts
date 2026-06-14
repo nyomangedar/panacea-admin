@@ -7,10 +7,12 @@ export async function apiGet<T>(path: string): Promise<T> {
 }
 
 export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
+  // Only declare a JSON content-type when we actually send a body — Fastify rejects
+  // an empty body that claims application/json (breaks bodyless POSTs like deactivate).
   const res = await fetch(path, {
     method: 'POST',
     credentials: 'include',
-    headers: { 'content-type': 'application/json' },
+    headers: body === undefined ? undefined : { 'content-type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   if (!res.ok) throw new Error(`POST ${path} failed: ${res.status}`);
